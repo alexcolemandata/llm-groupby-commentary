@@ -1,7 +1,11 @@
-from . import happy
+from .happy import demo
 
 
 def main() -> None:
-    print(happy.read_data_folder(happy.SOURCE_DIR).collect())
+    demo()
 
     return None
+
+
+if __name__ == "__main__":
+    main()
