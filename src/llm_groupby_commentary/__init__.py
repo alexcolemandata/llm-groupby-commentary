@@ -1,2 +1,3 @@
-def main() -> None:
-    print("Hello from llm-groupby-commentary!")
+from pathlib import Path
+
+DATA_DIR = Path(__file__).parent.resolve() / "data"

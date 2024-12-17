@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-llm-groupby-commentary = "llm_groupby_commentary:main"
+llm-groupby-commentary = "llm_groupby_commentary.main:main"
 
 [build-system]
 requires = ["hatchling"]
