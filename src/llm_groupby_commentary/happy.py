@@ -5,6 +5,7 @@ from pathlib import Path
 import polars as pl
 import re
 import pandera.polars as pa
+from pandera.polars import check_io
 
 from polars.datatypes import Int32
 import polars.selectors as cs
@@ -13,7 +14,7 @@ from llm_groupby_commentary import DATA_DIR
 
 SOURCE_DIR = DATA_DIR / "world_happiness"
 
-raw_schema = pa.DataFrameSchema(
+schema_raw = pa.DataFrameSchema(
     {
         "year": pa.Column(Int32),
         "country": pa.Column(str),
@@ -27,12 +28,32 @@ raw_schema = pa.DataFrameSchema(
         "score_perception_of_corruption": pa.Column(float, nullable=True),
         "score_generosity": pa.Column(float),
     },
-    strict="filter",
+    description="initial data does not have region defined for all years",
 )
 
-parsed_schema = raw_schema.update_column("region", required=True)
+schema_parsed = schema_raw.update_column(
+    "region", required=True, description="filled region from other years"
+)
+
+schema_stats = pa.DataFrameSchema(
+    {
+        "year": pa.Column(Int32),
+        "happiness_quartile": pa.Column(str),
+        "num_countries": pa.Column(int),
+        "mean_happiness_score": pa.Column(float),
+        "mean_gdp_per_capita": pa.Column(float),
+        "mean_healthy_life_expectancy": pa.Column(float),
+        "mean_social_support": pa.Column(float),
+        "mean_freedom_score": pa.Column(float),
+        "min_happiness_score": pa.Column(float),
+        "max_happiness_score": pa.Column(float),
+    },
+    description="Summary statistics for global and quartiles per year",
+    coerce=True,
+)
 
 
+@check_io(out=schema_raw)
 def read_data_file(path: Path) -> pl.LazyFrame:
     result = (
         pl.read_csv(path)
@@ -78,12 +99,13 @@ def read_data_file(path: Path) -> pl.LazyFrame:
         )
     )
 
-    return raw_schema.validate(
+    return schema_raw.validate(
         result,
         lazy=True,
     ).lazy()
 
 
+@check_io(data=schema_raw, out=schema_parsed)
 def fill_regions(data: pl.LazyFrame) -> pl.LazyFrame:
     """Fill regions for countries with a forward/backward fill"""
     return data.with_columns(
@@ -99,6 +121,7 @@ def fill_regions(data: pl.LazyFrame) -> pl.LazyFrame:
     )
 
 
+@check_io(out=schema_parsed)
 def read_data(folder: Path) -> pl.LazyFrame:
     return (
         pl.concat(
@@ -107,11 +130,50 @@ def read_data(folder: Path) -> pl.LazyFrame:
         )
         .sort(by=["country", "year"])
         .pipe(fill_regions)
-        .pipe(parsed_schema.validate, lazy=True)
+        .pipe(schema_parsed.validate, lazy=True)
         .lazy()
-        .select(col for col in parsed_schema.columns)
+        .select(col for col in schema_parsed.columns)
     )
 
 
+@check_io(out=schema_stats)
+def calc_stats(data: pl.LazyFrame) -> pl.LazyFrame:
+    aggs = [
+        pl.mean("happiness_score").alias("mean_happiness_score"),
+        pl.mean("gdp_per_capita").alias("mean_gdp_per_capita"),
+        pl.mean("healthy_life_expectancy").alias("mean_healthy_life_expectancy"),
+        pl.mean("score_family_and_social_support").alias("mean_social_support"),
+        pl.mean("score_freedom").alias("mean_freedom_score"),
+        pl.min("happiness_score").alias("min_happiness_score"),
+        pl.max("happiness_score").alias("max_happiness_score"),
+        pl.count("country").alias("num_countries"),  # Count countries per year
+    ]
+
+    yearly_stats = (
+        data.group_by("year").agg(aggs).with_columns(happiness_quartile=pl.lit("All"))
+    )
+
+    yearly_quartile_stats = (
+        data.with_columns(
+            pl.col("happiness_score")
+            .qcut(
+                quantiles=[0.25, 0.5, 0.75],
+                labels=["Q1", "Q2", "Q3", "Q4"],
+            )
+            .alias("happiness_quartile")
+        )
+        .group_by(["year", "happiness_quartile"])
+        .agg(aggs)
+        .sort(["year", "happiness_quartile"])
+    )
+
+    return pl.concat(
+        [yearly_stats, yearly_quartile_stats], how="diagonal_relaxed"
+    ).select(schema_stats.columns.keys())
+
+
 if __name__ == "__main__":
-    print(read_data(SOURCE_DIR).collect())
+    data = read_data(SOURCE_DIR)
+    stats = calc_stats(data)
+
+    print(f"data:\n{data.collect()}\n\nstats:\n{stats.collect()}\n\n")
