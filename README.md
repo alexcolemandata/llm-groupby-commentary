@@ -9,7 +9,10 @@ using ollama
 > llm-groupby-commentary
 asking ollama the following question:
 
-You are an expert political analyst, specialising in happiness. Provide a comprehensive summary on the 2015 World Happiness data for Australia using data for Australia compared to global statistics
+You are an expert political analyst, specialising in happiness. Provide a
+comprehensive summary on the 2015 World Happiness data for Australia using data
+for Australia compared to global statistics
+
 <Australia>
 [
   {
