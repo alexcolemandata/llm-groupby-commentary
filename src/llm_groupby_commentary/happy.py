@@ -13,7 +13,7 @@ from llm_groupby_commentary import DATA_DIR
 
 SOURCE_DIR = DATA_DIR / "world_happiness"
 
-schema = pa.DataFrameSchema(
+raw_schema = pa.DataFrameSchema(
     {
         "year": pa.Column(Int32),
         "country": pa.Column(str),
@@ -29,6 +29,8 @@ schema = pa.DataFrameSchema(
     },
     strict="filter",
 )
+
+parsed_schema = raw_schema.update_column("region", required=True)
 
 
 def read_data_file(path: Path) -> pl.LazyFrame:
@@ -76,9 +78,7 @@ def read_data_file(path: Path) -> pl.LazyFrame:
         )
     )
 
-    # result = result.select([k for k in schema.columns.keys() if k in result.columns])
-
-    return schema.validate(
+    return raw_schema.validate(
         result,
         lazy=True,
     ).lazy()
@@ -99,7 +99,7 @@ def fill_regions(data: pl.LazyFrame) -> pl.LazyFrame:
     )
 
 
-def read_data_folder(folder: Path) -> pl.LazyFrame:
+def read_data(folder: Path) -> pl.LazyFrame:
     return (
         pl.concat(
             [read_data_file(path) for path in folder.glob("*.csv")],
@@ -107,11 +107,11 @@ def read_data_folder(folder: Path) -> pl.LazyFrame:
         )
         .sort(by=["country", "year"])
         .pipe(fill_regions)
-        .pipe(schema.validate, lazy=True)
+        .pipe(parsed_schema.validate, lazy=True)
         .lazy()
-        .select(col for col in schema.columns)
+        .select(col for col in parsed_schema.columns)
     )
 
 
 if __name__ == "__main__":
-    print(read_data_folder(SOURCE_DIR).collect())
+    print(read_data(SOURCE_DIR).collect())
