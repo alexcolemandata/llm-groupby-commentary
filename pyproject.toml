@@ -1,7 +1,7 @@
 [project]
 name = "llm-groupby-commentary"
 version = "0.1.0"
-description = "Add your description here"
+description = "A learning project for generating commentary for polars frames with ollama"
 readme = "README.md"
 authors = [
     { name = "alexcolemandata", email = "coleman.g.alex@gmail.com" }
