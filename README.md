@@ -1,4 +1,4 @@
-# llm-grouby-commentary
+# llm-groupby-commentary
 
 A learning project for generating automatic commentary for polars groupby objects
 using ollama
